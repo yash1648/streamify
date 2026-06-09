@@ -11,7 +11,7 @@ The backend is a single Spring Boot application. All state is held in-memory usi
 ## Module Map
 
 ```
-com.watchparty
+com.streamify
 ├── controller
 │   └── RoomController.java
 ├── service
@@ -29,7 +29,7 @@ com.watchparty
 ├── websocket
 │   ├── WebSocketConfig.java
 │   └── RoomWebSocketHandler.java
-└── WatchPartyApplication.java
+└── StreamifyApplication.java
 ```
 
 ---

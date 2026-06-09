@@ -14,14 +14,14 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/watchparty.git
-cd watchparty/backend
+git clone https://github.com/your-org/streamify.git
+cd streamify/backend
 
 # Build the project
 ./mvnw clean package -DskipTests
 
 # Run locally
-java -jar target/watchparty-*.jar
+java -jar target/streamify-*.jar
 
 # Server starts at http://localhost:8080
 ```
@@ -39,7 +39,7 @@ java -jar target/watchparty-*.jar
 ## Frontend Setup
 
 ```bash
-cd watchparty/frontend
+cd streamify/frontend
 
 # Install dependencies
 npm install
@@ -123,7 +123,7 @@ npm run build
 ```bash
 cd backend
 ./mvnw clean package -DskipTests
-# Output: target/watchparty-*.jar
+# Output: target/streamify-*.jar
 ```
 
 ---

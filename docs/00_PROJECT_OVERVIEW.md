@@ -1,4 +1,4 @@
-# Watch Party Platform — Project Overview
+# Streamify — Project Overview
 
 ## Vision
 

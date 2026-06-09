@@ -152,7 +152,7 @@ async function startRecording() {
   recorder.onstop = () => {
     const blob = new Blob(chunks, { type: "video/webm" });
     // Save as downloadable file
-    saveAs(blob, "watchparty-recording.webm");
+    saveAs(blob, "streamify-recording.webm");
   };
 
   recorder.start();
@@ -182,8 +182,8 @@ async function startRecording() {
 ```json
 // manifest.json
 {
-  "name": "Watch Party",
-  "short_name": "WatchParty",
+  "name": "Streamify",
+  "short_name": "Streamify",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",
@@ -214,7 +214,7 @@ async function startRecording() {
 ```json
 // electron/package.json
 {
-  "name": "watchparty-desktop",
+  "name": "streamify-desktop",
   "main": "main.js",
   "dependencies": {
     "electron": "^28.0.0"

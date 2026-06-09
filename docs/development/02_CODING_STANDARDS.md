@@ -12,7 +12,7 @@
 | Methods | camelCase | `createRoom()`, `broadcastHeartbeat()` |
 | Variables | camelCase | `roomId`, `participantList` |
 | Constants | UPPER_SNAKE | `DRIFT_THRESHOLD_SECONDS` |
-| Packages | lowercase | `com.watchparty.service` |
+| Packages | lowercase | `com.streamify.service` |
 
 ### Code Style
 
@@ -26,18 +26,18 @@
 ### Folder Structure
 
 ```
-src/main/java/com/watchparty/
+src/main/java/com/streamify/
 ├── controller/
 ├── service/
 ├── model/
 ├── websocket/
-└── WatchPartyApplication.java
+└── StreamifyApplication.java
 
 src/main/resources/
 ├── application.yml
 └── application-prod.yml
 
-src/test/java/com/watchparty/
+src/test/java/com/streamify/
 ├── service/
 └── websocket/
 ```
