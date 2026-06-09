@@ -1,0 +1,13 @@
+server:
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: streamify
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+logging:
+  level:
+    com.streamify: DEBUG
+    org.springframework.web.socket: INFO
