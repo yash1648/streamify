@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useRoomStore } from '../stores/roomStore';
+import { useChatStore } from '../stores/chatStore';
 import { useWebSocket } from './useWebSocket';
 import { websocketService } from '../services/websocketService';
 
@@ -24,6 +25,11 @@ export const useRoom = (roomId) => {
           break;
         case 'HOST_TRANSFERRED':
           setHost(message.newHostId);
+          break;
+        case 'CHAT_MESSAGE':
+          if (message.message) {
+            useChatStore.getState().addMessage(message.message);
+          }
           break;
         default:
           break;

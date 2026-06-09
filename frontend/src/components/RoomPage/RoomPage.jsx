@@ -4,6 +4,7 @@ import { useRoom } from '../../hooks/useRoom';
 import { useRoomStore } from '../../stores/roomStore';
 import { websocketService } from '../../services/websocketService';
 import UserList from './UserList';
+import ChatPanel from './ChatPanel';
 import './RoomPage.css';
 
 const RoomPage = () => {
@@ -60,9 +61,7 @@ const RoomPage = () => {
         </div>
 
         <div className="side-panel">
-          <div className="glass-panel chat-container">
-            <p style={{ color: 'var(--text-secondary)', margin: 'auto' }}>Chat Placeholder (Sprint 4)</p>
-          </div>
+          <ChatPanel />
           
           <UserList />
         </div>
