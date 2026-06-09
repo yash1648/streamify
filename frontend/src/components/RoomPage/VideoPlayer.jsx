@@ -3,10 +3,13 @@ import ReactPlayer from 'react-player';
 import { useRoomStore } from '../../stores/roomStore';
 import { useVideoStore } from '../../stores/videoStore';
 import { useSync } from '../../hooks/useSync';
+import { websocketService } from '../../services/websocketService';
 import './VideoPlayer.css';
 
 const VideoPlayer = () => {
   const [inputUrl, setInputUrl] = useState('');
+  const [playerError, setPlayerError] = useState(null);
+  const [connectionError, setConnectionError] = useState(false);
   const playerRef = useRef(null);
   const isReady = useRef(false);
   // Ref to suppress sync-triggered play/pause events from being re-broadcast
@@ -22,18 +25,26 @@ const VideoPlayer = () => {
   const lastSyncedAt = useVideoStore(state => state.lastSyncedAt);
   const { syncUrl, syncPlay, syncPause, syncSeek } = useSync();
 
+  // Track WebSocket connection state for UI feedback
+  useEffect(() => {
+    const checkConnection = () => setConnectionError(!websocketService.connected);
+    checkConnection();
+    const interval = setInterval(checkConnection, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Drift detection for non-host participants
   useEffect(() => {
     if (isHost || !isReady.current || !playerRef.current) return;
 
-    const localTime = playerRef.current.getCurrentTime();
-    if (localTime == null) return;
+    const localTime = playerRef.current.currentTime;
+    if (localTime == null || isNaN(localTime)) return;
 
     const drift = Math.abs(localTime - currentTime);
     if (drift > 1.5) {
       console.log(`Drift detected: local=${localTime.toFixed(1)}, remote=${currentTime.toFixed(1)}, drift=${drift.toFixed(1)}s. Seeking...`);
       isSyncUpdate.current = true;
-      playerRef.current.seekTo(currentTime, 'seconds');
+      playerRef.current.currentTime = currentTime;
     }
   }, [currentTime, lastSyncedAt, isHost]);
 
@@ -50,18 +61,28 @@ const VideoPlayer = () => {
 
   const handleUrlSubmit = (e) => {
     e.preventDefault();
-    if (isHost && inputUrl.trim()) {
-      syncUrl(inputUrl.trim());
-      setInputUrl('');
+    if (!isHost || !inputUrl.trim()) return;
+
+    // Check WebSocket connection before trying to send
+    if (!websocketService.connected) {
+      setConnectionError(true);
+      alert('Cannot load video: WebSocket is not connected. Please wait a moment and try again.');
+      return;
     }
+
+    setPlayerError(null); // Clear previous errors
+    console.log('Loading video URL:', inputUrl.trim());
+    syncUrl(inputUrl.trim());
+    setInputUrl('');
   };
 
   const handleReady = useCallback(() => {
     isReady.current = true;
+    setPlayerError(null);
     console.log('ReactPlayer ready');
     // If we're a non-host joining after the host already set a time, seek to it
     if (!isHost && currentTime > 0 && playerRef.current) {
-      playerRef.current.seekTo(currentTime, 'seconds');
+      playerRef.current.currentTime = currentTime;
     }
   }, [isHost, currentTime]);
 
@@ -71,8 +92,8 @@ const VideoPlayer = () => {
       return;
     }
     if (isHost && playerRef.current) {
-      const time = playerRef.current.getCurrentTime();
-      if (time != null) syncPlay(time);
+      const time = playerRef.current.currentTime;
+      if (time != null && !isNaN(time)) syncPlay(time);
     }
   }, [isHost, syncPlay]);
 
@@ -82,23 +103,28 @@ const VideoPlayer = () => {
       return;
     }
     if (isHost && playerRef.current) {
-      const time = playerRef.current.getCurrentTime();
-      if (time != null) syncPause(time);
+      const time = playerRef.current.currentTime;
+      if (time != null && !isNaN(time)) syncPause(time);
     }
   }, [isHost, syncPause]);
 
-  const handleSeek = useCallback((seconds) => {
+  const handleSeeked = useCallback((event) => {
     if (isSyncUpdate.current) {
       isSyncUpdate.current = false;
       return;
     }
-    if (isHost) {
-      syncSeek(seconds);
+    if (isHost && playerRef.current) {
+      const time = playerRef.current.currentTime;
+      if (time != null && !isNaN(time)) syncSeek(time);
     }
   }, [isHost, syncSeek]);
 
   const handleError = useCallback((error) => {
     console.error('ReactPlayer error:', error);
+    setPlayerError(
+      `Failed to load video. Check that the URL is correct and accessible. ` +
+      `(YouTube, Vimeo, Twitch, and direct MP4 URLs are supported.)`
+    );
   }, []);
 
   return (
@@ -110,12 +136,32 @@ const VideoPlayer = () => {
             value={inputUrl}
             onChange={(e) => setInputUrl(e.target.value)}
             placeholder="Enter video URL (YouTube, MP4, etc.)"
+            disabled={!websocketService.connected}
           />
-          <button type="submit">Load Video</button>
+          <button type="submit" disabled={!inputUrl.trim() || !websocketService.connected}>
+            {websocketService.connected ? 'Load Video' : 'Connecting...'}
+          </button>
         </form>
       )}
 
+      {connectionError && videoUrl && (
+        <div className="connection-warning">
+          ⚠️ WebSocket disconnected — reconnecting...
+        </div>
+      )}
+
       <div className="player-container">
+        {playerError && (
+          <div className="player-error-overlay">
+            <p className="player-error-message">{playerError}</p>
+            {isHost && (
+              <button className="btn-primary" onClick={() => setPlayerError(null)}>
+                Dismiss
+              </button>
+            )}
+          </div>
+        )}
+
         {videoUrl ? (
           <>
             <ReactPlayer
@@ -129,7 +175,7 @@ const VideoPlayer = () => {
               onReady={handleReady}
               onPlay={handlePlay}
               onPause={handlePause}
-              onSeek={handleSeek}
+              onSeeked={handleSeeked}
               onError={handleError}
               config={{
                 youtube: {
@@ -142,7 +188,10 @@ const VideoPlayer = () => {
           </>
         ) : (
           <p style={{ color: 'var(--text-secondary)' }}>
-            {isHost ? 'Load a video URL to start watching' : 'Waiting for host to load a video...'}
+            {isHost
+              ? (connectionError ? 'Connecting to server... please wait.' : 'Enter a video URL above to start watching')
+              : 'Waiting for host to load a video...'
+            }
           </p>
         )}
       </div>
