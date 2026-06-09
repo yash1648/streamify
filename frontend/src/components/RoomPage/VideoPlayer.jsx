@@ -117,12 +117,13 @@ const VideoPlayer = () => {
 
       <div className="player-container">
         {videoUrl ? (
-          <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+          <>
             <ReactPlayer
+              className="react-player-wrapper"
               ref={playerRef}
               url={videoUrl}
               playing={playing}
-              controls={isHost}
+              controls={isHost} // Only host gets native controls
               width="100%"
               height="100%"
               onReady={handleReady}
@@ -135,9 +136,10 @@ const VideoPlayer = () => {
                   playerVars: { disablekb: !isHost ? 1 : 0 }
                 }
               }}
+              style={{ position: 'absolute', top: 0, left: 0 }}
             />
             {!isHost && <div className="player-overlay" />}
-          </div>
+          </>
         ) : (
           <p style={{ color: 'var(--text-secondary)' }}>
             {isHost ? 'Load a video URL to start watching' : 'Waiting for host to load a video...'}
