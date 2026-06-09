@@ -7,19 +7,29 @@ class WebSocketService {
   constructor() {
     this.client = null;
     this.subscriptions = new Map();
+    this.connected = false;
+    this.connectCallbacks = [];
   }
 
   connect(onConnect, onError) {
-    if (this.client && this.client.connected) {
+    if (this.client && this.connected) {
       if (onConnect) onConnect();
       return;
     }
 
-    const socket = new SockJS(WS_URL);
+    // If already activating, just queue the callback
+    if (this.client && !this.connected) {
+      if (onConnect) this.connectCallbacks.push(onConnect);
+      return;
+    }
+
+    if (onConnect) this.connectCallbacks.push(onConnect);
+
     this.client = new Client({
-      webSocketFactory: () => socket,
+      // Factory must create a NEW SockJS instance each time (for reconnects)
+      webSocketFactory: () => new SockJS(WS_URL),
       debug: (str) => {
-        // console.log(str);
+        // Uncomment for debugging: console.log(str);
       },
       reconnectDelay: 5000,
       heartbeatIncoming: 4000,
@@ -28,13 +38,21 @@ class WebSocketService {
 
     this.client.onConnect = () => {
       console.log('Connected to WebSocket via STOMP');
-      if (onConnect) onConnect();
+      this.connected = true;
+      // Fire all queued connect callbacks
+      this.connectCallbacks.forEach(cb => cb());
+      this.connectCallbacks = [];
     };
 
     this.client.onStompError = (frame) => {
       console.error('Broker reported error: ' + frame.headers['message']);
       console.error('Additional details: ' + frame.body);
+      this.connected = false;
       if (onError) onError(frame);
+    };
+
+    this.client.onWebSocketClose = () => {
+      this.connected = false;
     };
 
     this.client.activate();
@@ -45,11 +63,13 @@ class WebSocketService {
       this.client.deactivate();
       this.client = null;
     }
+    this.connected = false;
     this.subscriptions.clear();
+    this.connectCallbacks = [];
   }
 
   subscribe(destination, callback) {
-    if (!this.client || !this.client.connected) {
+    if (!this.client || !this.connected) {
       console.error('Cannot subscribe: STOMP client is not connected');
       return null;
     }
@@ -71,7 +91,7 @@ class WebSocketService {
   }
 
   publish(destination, body) {
-    if (!this.client || !this.client.connected) {
+    if (!this.client || !this.connected) {
       console.error('Cannot publish: STOMP client is not connected');
       return;
     }
