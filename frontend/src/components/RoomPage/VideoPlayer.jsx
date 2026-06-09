@@ -10,6 +10,8 @@ const VideoPlayer = () => {
   const [inputUrl, setInputUrl] = useState('');
   const [playerError, setPlayerError] = useState(null);
   const [connectionError, setConnectionError] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [showUnmuteOverlay, setShowUnmuteOverlay] = useState(false);
   const playerRef = useRef(null);
   const isReady = useRef(false);
   // Ref to suppress sync-triggered play/pause events from being re-broadcast
@@ -84,6 +86,12 @@ const VideoPlayer = () => {
     if (!isHost && currentTime > 0 && playerRef.current) {
       playerRef.current.currentTime = currentTime;
     }
+    // For participants, we force mute initially to bypass browser Autoplay policies
+    if (!isHost && !isReady.current) {
+      setIsMuted(true);
+      setShowUnmuteOverlay(true);
+    }
+    isReady.current = true;
   }, [isHost, currentTime]);
 
   const handlePlay = useCallback(() => {
@@ -126,6 +134,11 @@ const VideoPlayer = () => {
       `(YouTube, Vimeo, Twitch, and direct MP4 URLs are supported.)`
     );
   }, []);
+
+  const handleUnmute = () => {
+    setIsMuted(false);
+    setShowUnmuteOverlay(false);
+  };
 
   return (
     <div className="video-player-wrapper glass-panel">
@@ -170,6 +183,7 @@ const VideoPlayer = () => {
               src={videoUrl}
               playing={playing}
               controls={isHost} // Only host gets native controls
+              muted={isMuted} // Participants start muted to allow autoplay
               width="100%"
               height="100%"
               onReady={handleReady}
@@ -184,7 +198,14 @@ const VideoPlayer = () => {
               }}
               style={{ position: 'absolute', top: 0, left: 0 }}
             />
-            {!isHost && <div className="player-overlay" />}
+            {showUnmuteOverlay && !isHost && (
+              <div className="unmute-overlay" onClick={handleUnmute}>
+                <button className="btn-primary unmute-btn">
+                  🔇 Click to Unmute & Sync Audio
+                </button>
+              </div>
+            )}
+            {!isHost && !showUnmuteOverlay && <div className="player-overlay" />}
           </>
         ) : (
           <p style={{ color: 'var(--text-secondary)' }}>

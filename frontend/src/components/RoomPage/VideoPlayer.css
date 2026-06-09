@@ -70,3 +70,64 @@
   /* Transparent overlay to block clicks for non-hosts */
   background: transparent;
 }
+
+.unmute-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 15;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.unmute-overlay:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.unmute-btn {
+  font-size: 1.1rem;
+  padding: 1rem 2rem;
+  border-radius: 50px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  pointer-events: none; /* Let the overlay handle the click to ensure it registers as a page interaction */
+}
+
+.connection-warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  text-align: center;
+  border-bottom: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.player-error-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  background: rgba(0, 0, 0, 0.75);
+  z-index: 20;
+  padding: 2rem;
+}
+
+.player-error-message {
+  color: #f87171;
+  text-align: center;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  max-width: 500px;
+}
