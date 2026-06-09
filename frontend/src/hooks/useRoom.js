@@ -89,8 +89,10 @@ export const useRoom = (roomId) => {
         });
       }
 
-      websocketService.unsubscribe(`/topic/room/${roomId}`);
-      websocketService.unsubscribe(`/user/queue/sync`);
+      if (subs) {
+        if (subs.topicSub) websocketService.unsubscribe(subs.topicSub.id);
+        if (subs.queueSub) websocketService.unsubscribe(subs.queueSub.id);
+      }
     };
   }, [roomId]); // Only re-run when roomId changes — NOT on subscribe/publish/isConnected changes
 };

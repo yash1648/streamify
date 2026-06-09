@@ -78,15 +78,15 @@ class WebSocketService {
       callback(JSON.parse(message.body));
     });
 
-    this.subscriptions.set(destination, subscription);
+    this.subscriptions.set(subscription.id, subscription);
     return subscription;
   }
 
-  unsubscribe(destination) {
-    const subscription = this.subscriptions.get(destination);
+  unsubscribe(subscriptionId) {
+    const subscription = this.subscriptions.get(subscriptionId);
     if (subscription) {
       subscription.unsubscribe();
-      this.subscriptions.delete(destination);
+      this.subscriptions.delete(subscriptionId);
     }
   }
 
