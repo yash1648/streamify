@@ -46,9 +46,18 @@
   position: relative;
   background: #000;
   width: 100%;
+  min-height: 400px; /* Force a minimum height so absolute children don't collapse to 0 */
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.react-player-wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .player-overlay {
