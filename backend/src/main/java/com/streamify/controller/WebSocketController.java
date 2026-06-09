@@ -3,6 +3,7 @@ package com.streamify.controller;
 import com.streamify.dto.ChatMessage;
 import com.streamify.model.Participant;
 import com.streamify.service.PresenceService;
+import com.streamify.service.SyncService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -19,6 +20,7 @@ import java.util.Map;
 public class WebSocketController {
 
     private final PresenceService presenceService;
+    private final SyncService syncService;
     private final SimpMessagingTemplate messagingTemplate;
 
     @MessageMapping("/room.join")
@@ -65,5 +67,46 @@ public class WebSocketController {
         );
 
         messagingTemplate.convertAndSend("/topic/room/" + message.getRoomId(), payload);
+    }
+
+    @MessageMapping("/room.sync.url")
+    public void syncUrl(Map<String, String> payload) {
+        String roomId = payload.get("roomId");
+        String userId = payload.get("userId");
+        String videoUrl = payload.get("videoUrl");
+        syncService.loadVideo(roomId, userId, videoUrl);
+    }
+
+    @MessageMapping("/room.sync.play")
+    public void syncPlay(Map<String, Object> payload) {
+        String roomId = (String) payload.get("roomId");
+        String userId = (String) payload.get("userId");
+        double currentTime = parseDouble(payload.get("currentTime"));
+        syncService.play(roomId, userId, currentTime);
+    }
+
+    @MessageMapping("/room.sync.pause")
+    public void syncPause(Map<String, Object> payload) {
+        String roomId = (String) payload.get("roomId");
+        String userId = (String) payload.get("userId");
+        double currentTime = parseDouble(payload.get("currentTime"));
+        syncService.pause(roomId, userId, currentTime);
+    }
+
+    @MessageMapping("/room.sync.seek")
+    public void syncSeek(Map<String, Object> payload) {
+        String roomId = (String) payload.get("roomId");
+        String userId = (String) payload.get("userId");
+        double currentTime = parseDouble(payload.get("currentTime"));
+        syncService.seek(roomId, userId, currentTime);
+    }
+
+    private double parseDouble(Object val) {
+        if (val instanceof Number) {
+            return ((Number) val).doubleValue();
+        } else if (val instanceof String) {
+            return Double.parseDouble((String) val);
+        }
+        return 0.0;
     }
 }

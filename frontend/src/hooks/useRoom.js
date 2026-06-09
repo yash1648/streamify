@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useRoomStore } from '../stores/roomStore';
 import { useChatStore } from '../stores/chatStore';
+import { useVideoStore } from '../stores/videoStore';
 import { useWebSocket } from './useWebSocket';
 import { websocketService } from '../services/websocketService';
 
@@ -31,6 +32,9 @@ export const useRoom = (roomId) => {
             useChatStore.getState().addMessage(message.message);
           }
           break;
+        case 'SYNC_STATE':
+          useVideoStore.getState().setSyncState(message);
+          break;
         default:
           break;
       }
@@ -40,7 +44,7 @@ export const useRoom = (roomId) => {
     const queueSub = subscribe(`/user/queue/sync`, (message) => {
       if (message.type === 'SYNC_STATE') {
         console.log('Received initial sync state:', message);
-        // Will handle this in useSync hook later, just logging for now
+        useVideoStore.getState().setSyncState(message);
       }
     });
 

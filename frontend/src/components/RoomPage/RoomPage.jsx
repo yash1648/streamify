@@ -5,6 +5,7 @@ import { useRoomStore } from '../../stores/roomStore';
 import { websocketService } from '../../services/websocketService';
 import UserList from './UserList';
 import ChatPanel from './ChatPanel';
+import VideoPlayer from './VideoPlayer';
 import './RoomPage.css';
 
 const RoomPage = () => {
@@ -51,9 +52,7 @@ const RoomPage = () => {
 
       <div className="room-layout">
         <div className="main-content">
-          <div className="glass-panel video-container">
-            <p style={{ color: 'var(--text-secondary)' }}>Video Player Placeholder (Sprint 2)</p>
-          </div>
+          <VideoPlayer />
           
           <div className="glass-panel voice-controls">
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Voice Controls Placeholder (Sprint 3)</p>
