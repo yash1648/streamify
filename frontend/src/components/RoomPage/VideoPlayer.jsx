@@ -167,7 +167,7 @@ const VideoPlayer = () => {
             <ReactPlayer
               className="react-player-wrapper"
               ref={playerRef}
-              url={videoUrl}
+              src={videoUrl}
               playing={playing}
               controls={isHost} // Only host gets native controls
               width="100%"
