@@ -36,7 +36,7 @@ public class SyncService {
         Room room = assertIsHost(roomId, userId);
         VideoState state = room.getVideoState();
         state.setVideoUrl(videoUrl);
-        state.setPlaying(false);
+        state.setPlaying(true); // Auto-play on load for better UX
         state.setCurrentTime(0.0);
         state.setLastUpdatedAt(Instant.now());
 
