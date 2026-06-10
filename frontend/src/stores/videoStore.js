@@ -14,6 +14,6 @@ export const useVideoStore = create((set) => ({
     videoUrl: state.videoUrl,
     playing: state.playing,
     currentTime: state.currentTime,
-    lastSyncedAt: state.timestamp || Date.now()
+    lastSyncedAt: Date.now()
   })
 }));

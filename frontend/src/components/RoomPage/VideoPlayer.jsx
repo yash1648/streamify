@@ -153,7 +153,7 @@ const VideoPlayer = () => {
       isSyncUpdate.current = false;
       return;
     }
-    if (isHost && readyRef.current) {
+    if (isHost) {
       const time = safeGetCurrentTime();
       if (time != null && !isNaN(time)) syncPlay(time);
     }
@@ -164,7 +164,7 @@ const VideoPlayer = () => {
       isSyncUpdate.current = false;
       return;
     }
-    if (isHost && readyRef.current) {
+    if (isHost) {
       const time = safeGetCurrentTime();
       if (time != null && !isNaN(time)) syncPause(time);
     }
@@ -175,7 +175,7 @@ const VideoPlayer = () => {
       isSyncUpdate.current = false;
       return;
     }
-    if (isHost && readyRef.current) {
+    if (isHost) {
       const time = safeGetCurrentTime();
       if (time != null && !isNaN(time)) syncSeek(time);
     }
