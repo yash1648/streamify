@@ -38,6 +38,12 @@ const VideoPlayer = () => {
   const lastSyncedAt = useVideoStore(state => state.lastSyncedAt);
   const { syncUrl, syncPlay, syncPause, syncSeek, syncProgress } = useSync();
 
+  // Calculate expected current time accounting for time elapsed since the server
+  // sent the sync state. This is the same calculation used in the drift detection
+  // effect below.
+  const elapsedSinceSync = playing ? (Date.now() - lastSyncedAt) / 1000 : 0;
+  const expectedCurrentTime = currentTime + elapsedSinceSync;
+
   const isMuted = !isHost && !userClickedUnmute;
   const showUnmuteOverlay = !isHost && !userClickedUnmute && isReady && !!videoUrl;
   // Mirror ref so callbacks can always read the latest ready state
@@ -137,16 +143,18 @@ const VideoPlayer = () => {
     setPlayerError(null);
     console.log('ReactPlayer ready');
 
-    // Seek late-joining participants to current server position
-    if (!isHost && currentTime > 0 && playerRef.current) {
+    // Seek late-joining participants to the expected current position,
+    // accounting for time elapsed since the sync state was received.
+    if (!isHost && expectedCurrentTime > 0 && playerRef.current) {
       if (typeof playerRef.current.seekTo === 'function') {
-        playerRef.current.seekTo(currentTime, 'seconds');
+        console.log(`Seeking to expected position: ${expectedCurrentTime.toFixed(1)}s`);
+        playerRef.current.seekTo(expectedCurrentTime, 'seconds');
       }
     }
 
     setIsReady(true);
     readyRef.current = true;
-  }, [isHost, currentTime]);
+  }, [isHost, expectedCurrentTime]);
 
   const handlePlay = useCallback(() => {
     if (isSyncUpdate.current) {
@@ -262,7 +270,14 @@ const VideoPlayer = () => {
               onError={handleError}
               config={{
                 youtube: {
-                  playerVars: { disablekb: !isHost ? 1 : 0 }
+                  playerVars: {
+                    disablekb: !isHost ? 1 : 0,
+                    // For participants joining mid-playback, start at the expected
+                    // position so YouTube doesn't flash at 0:00 before we seek.
+                    ...(!isHost && expectedCurrentTime > 0
+                      ? { start: Math.floor(expectedCurrentTime) }
+                      : {})
+                  }
                 }
               }}
               style={{ position: 'absolute', top: 0, left: 0 }}
