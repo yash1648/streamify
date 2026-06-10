@@ -16,9 +16,13 @@ const VideoPlayer = () => {
   // The host never needs muted since they interact via a user gesture (click).
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isReady, setIsReady] = useState(false);
+  const readyRef = useRef(false);
   const playerRef = useRef(null);
   // Ref to suppress sync-triggered play/pause events from being re-broadcast
   const isSyncUpdate = useRef(false);
+  // Track the latest known position from onProgress. Used as fallback when
+  // getCurrentTime() isn't available yet (YouTube fires onPlay before onReady).
+  const lastKnownTime = useRef(0);
 
   const [userClickedUnmute, setUserClickedUnmute] = useState(false);
 
@@ -36,6 +40,9 @@ const VideoPlayer = () => {
 
   const isMuted = !isHost && !userClickedUnmute;
   const showUnmuteOverlay = !isHost && !userClickedUnmute && isReady && !!videoUrl;
+  // Mirror ref so callbacks can always read the latest ready state
+  // even when their closure captures a stale value.
+  readyRef.current = isReady;
 
   // Track WebSocket connection state for UI feedback
   useEffect(() => {
@@ -45,11 +52,21 @@ const VideoPlayer = () => {
     return () => clearInterval(interval);
   }, []);
 
+  /** Safely read the player's current time. Returns fallback if unavailable. */
+  const safeGetCurrentTime = (fallback = 0) => {
+    if (playerRef.current && typeof playerRef.current.getCurrentTime === 'function') {
+      return playerRef.current.getCurrentTime();
+    }
+    // Use the last known time from onProgress as fallback (handles YouTube's
+    // onPlay-before-onReady quirk).
+    return lastKnownTime.current || fallback;
+  };
+
   // Drift detection and smooth catch-up for non-host participants
   useEffect(() => {
     if (isHost || !isReady || !playerRef.current) return;
 
-    const localTime = playerRef.current.getCurrentTime();
+    const localTime = safeGetCurrentTime();
     if (localTime == null || isNaN(localTime)) return;
 
     // Calculate where the server's playhead *should be right now* by accounting
@@ -67,7 +84,9 @@ const VideoPlayer = () => {
       if (absDrift > 1.0) {
         console.log(`Hard seeking. Drift: ${drift.toFixed(1)}s`);
         isSyncUpdate.current = true;
-        playerRef.current.seekTo(expectedServerTime, 'seconds');
+        if (playerRef.current && typeof playerRef.current.seekTo === 'function') {
+          playerRef.current.seekTo(expectedServerTime, 'seconds');
+        }
       }
       setPlaybackRate(1);
       return;
@@ -120,10 +139,13 @@ const VideoPlayer = () => {
 
     // Seek late-joining participants to current server position
     if (!isHost && currentTime > 0 && playerRef.current) {
-      playerRef.current.seekTo(currentTime, 'seconds');
+      if (typeof playerRef.current.seekTo === 'function') {
+        playerRef.current.seekTo(currentTime, 'seconds');
+      }
     }
 
     setIsReady(true);
+    readyRef.current = true;
   }, [isHost, currentTime]);
 
   const handlePlay = useCallback(() => {
@@ -131,8 +153,8 @@ const VideoPlayer = () => {
       isSyncUpdate.current = false;
       return;
     }
-    if (isHost && playerRef.current) {
-      const time = playerRef.current.getCurrentTime();
+    if (isHost && readyRef.current) {
+      const time = safeGetCurrentTime();
       if (time != null && !isNaN(time)) syncPlay(time);
     }
   }, [isHost, syncPlay]);
@@ -142,8 +164,8 @@ const VideoPlayer = () => {
       isSyncUpdate.current = false;
       return;
     }
-    if (isHost && playerRef.current) {
-      const time = playerRef.current.getCurrentTime();
+    if (isHost && readyRef.current) {
+      const time = safeGetCurrentTime();
       if (time != null && !isNaN(time)) syncPause(time);
     }
   }, [isHost, syncPause]);
@@ -153,14 +175,16 @@ const VideoPlayer = () => {
       isSyncUpdate.current = false;
       return;
     }
-    if (isHost && playerRef.current) {
-      const time = playerRef.current.getCurrentTime();
+    if (isHost && readyRef.current) {
+      const time = safeGetCurrentTime();
       if (time != null && !isNaN(time)) syncSeek(time);
     }
   }, [isHost, syncSeek]);
 
   const lastSyncTime = useRef(0);
   const handleProgress = useCallback((state) => {
+    // Always track the latest position (used as fallback by safeGetCurrentTime)
+    lastKnownTime.current = state.playedSeconds;
     if (!isHost) return;
     const now = Date.now();
     // Host sends accurate heartbeat every 3 seconds
