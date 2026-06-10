@@ -68,47 +68,58 @@ const VideoPlayer = () => {
     return lastKnownTime.current || fallback;
   };
 
-  // Drift detection and smooth catch-up for non-host participants
+  // Continuous drift detection and smooth catch-up for non-host participants.
+  // Runs on a 1-second timer so the participant self-corrects between server
+  // heartbeats, keeping sync tight even when broadcasts are delayed.
   useEffect(() => {
     if (isHost || !isReady || !playerRef.current) return;
 
-    const localTime = safeGetCurrentTime();
-    if (localTime == null || isNaN(localTime)) return;
+    const correctDrift = () => {
+      const localTime = safeGetCurrentTime();
+      if (localTime == null || isNaN(localTime)) return;
 
-    // Calculate where the server's playhead *should be right now* by accounting
-    // for the time elapsed since the sync message was sent. Without this, the
-    // server-reported currentTime is always a few hundred ms behind reality,
-    // making the participant think they're ahead when they're actually synced.
-    const elapsedSinceSync = (Date.now() - lastSyncedAt) / 1000;
-    const expectedServerTime = currentTime + (playing ? elapsedSinceSync : 0);
+      // Calculate where the server's playhead *should be right now* by accounting
+      // for the time elapsed since the latest sync message was received.
+      // This is recalculated FRESH on every tick so network/jitter delays are
+      // automatically absorbed — no stale closure values.
+      const elapsedSinceSync = (Date.now() - lastSyncedAt) / 1000;
+      const expectedServerTime = currentTime + (playing ? elapsedSinceSync : 0);
 
-    const drift = expectedServerTime - localTime; // Positive if participant is behind
-    const absDrift = Math.abs(drift);
+      const drift = expectedServerTime - localTime; // Positive if participant is behind
+      const absDrift = Math.abs(drift);
 
-    // Hard seek if video is paused, or if way out of sync (> 4s)
-    if (!playing || absDrift > 4.0) {
-      if (absDrift > 1.0) {
-        console.log(`Hard seeking. Drift: ${drift.toFixed(1)}s`);
-        isSyncUpdate.current = true;
-        if (playerRef.current && typeof playerRef.current.seekTo === 'function') {
-          playerRef.current.seekTo(expectedServerTime, 'seconds');
+      // Hard seek if video is paused, or if way out of sync
+      if (!playing || absDrift > 3.0) {
+        if (absDrift > 0.5) {
+          console.log(`Hard seeking. Drift: ${drift.toFixed(2)}s`);
+          isSyncUpdate.current = true;
+          if (playerRef.current && typeof playerRef.current.seekTo === 'function') {
+            playerRef.current.seekTo(expectedServerTime, 'seconds');
+          }
         }
+        setPlaybackRate(1);
+        return;
       }
-      setPlaybackRate(1);
-      return;
-    }
 
-    // Smooth catch-up using playback speed (1.25x or 0.75x supported by YouTube)
-    if (drift > 1.5) {
-      // Participant is behind by > 1.5s
-      setPlaybackRate(1.25);
-    } else if (drift < -1.5) {
-      // Participant is ahead by > 1.5s
-      setPlaybackRate(0.75);
-    } else if (absDrift < 0.5) {
-      // Synced! Restore normal speed
-      setPlaybackRate(1);
-    }
+      // Smooth catch-up using playback speed (supported by YouTube)
+      if (drift > 0.8) {
+        // Participant is behind
+        setPlaybackRate(1.15);
+      } else if (drift < -0.8) {
+        // Participant is ahead
+        setPlaybackRate(0.85);
+      } else if (absDrift < 0.3) {
+        // Within tolerance — restore normal speed
+        setPlaybackRate(1);
+      }
+    };
+
+    // Run immediately on mount / deps change
+    correctDrift();
+
+    // Then run every 1s for continuous self-correction
+    const interval = setInterval(correctDrift, 1000);
+    return () => clearInterval(interval);
   }, [currentTime, lastSyncedAt, isHost, playing, isReady]);
 
   // When playing state changes from sync, mark it so onPlay/onPause don't re-broadcast
@@ -195,8 +206,9 @@ const VideoPlayer = () => {
     lastKnownTime.current = state.playedSeconds;
     if (!isHost) return;
     const now = Date.now();
-    // Host sends accurate heartbeat every 3 seconds
-    if (now - lastSyncTime.current > 3000) {
+    // Host sends progress every ~2s. The backend now broadcasts immediately,
+    // so participants get near-real-time position updates for tight sync.
+    if (now - lastSyncTime.current > 2000) {
       lastSyncTime.current = now;
       syncProgress(state.playedSeconds);
     }
