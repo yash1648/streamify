@@ -23,6 +23,8 @@ const VideoPlayer = () => {
   // Track the latest known position from onProgress. Used as fallback when
   // getCurrentTime() isn't available yet (YouTube fires onPlay before onReady).
   const lastKnownTime = useRef(0);
+  // Track if we've successfully performed the initial seek for late-joiners
+  const hasInitialSeeked = useRef(false);
 
   const [userClickedUnmute, setUserClickedUnmute] = useState(false);
 
@@ -88,8 +90,11 @@ const VideoPlayer = () => {
       const drift = expectedServerTime - localTime; // Positive if participant is behind
       const absDrift = Math.abs(drift);
 
-      // Hard seek if video is paused, or if way out of sync
-      if (!playing || absDrift > 3.0) {
+      // Hard seek if video is paused, or if way out of sync.
+      // Also force a hard seek if this is the participant's first sync and they are >0.5s behind,
+      // to prevent them from starting at 0:00 and trying to "smooth catchup" for 10 seconds.
+      const isInitialSync = !hasInitialSeeked.current;
+      if (!playing || absDrift > 3.0 || (isInitialSync && absDrift > 0.5)) {
         if (absDrift > 0.5) {
           console.log(`Hard seeking. Drift: ${drift.toFixed(2)}s`);
           isSyncUpdate.current = true;
@@ -98,8 +103,13 @@ const VideoPlayer = () => {
           }
         }
         setPlaybackRate(1);
+        if (absDrift <= 1.0) {
+          hasInitialSeeked.current = true;
+        }
         return;
       }
+
+      hasInitialSeeked.current = true; // Mark initial seek done if we're naturally in sync
 
       // Smooth catch-up using playback speed (supported by YouTube)
       if (drift > 0.8) {
@@ -150,22 +160,41 @@ const VideoPlayer = () => {
     setInputUrl('');
   };
 
+  const calcTarget = () => {
+    const { currentTime: ct, lastSyncedAt: lsa, playing: p } = useVideoStore.getState();
+    const elapsed = p ? (Date.now() - lsa) / 1000 : 0;
+    return ct + elapsed;
+  };
+
   const handleReady = useCallback(() => {
     setPlayerError(null);
     console.log('ReactPlayer ready');
 
-    // Seek late-joining participants to the expected current position,
-    // accounting for time elapsed since the sync state was received.
-    if (!isHost && expectedCurrentTime > 0 && playerRef.current) {
-      if (typeof playerRef.current.seekTo === 'function') {
-        console.log(`Seeking to expected position: ${expectedCurrentTime.toFixed(1)}s`);
-        playerRef.current.seekTo(expectedCurrentTime, 'seconds');
+    // Seek late-joining participants to the current host position.
+    // Reads FRESH values from the Zustand store via getState() so the seek
+    // always uses the latest position — even when the YouTube iframe takes
+    // 1-2s to load (the render-time closure would be stale by then).
+    if (!isHost && playerRef.current && typeof playerRef.current.seekTo === 'function') {
+      const target = calcTarget();
+      if (target > 0) {
+        console.log(`Seeking to expected position: ${target.toFixed(1)}s`);
+        playerRef.current.seekTo(target, 'seconds');
+        // HTML5 videos sometimes reset currentTime to 0 when autoplay initiates
+        // right after onLoadedMetadata. A deferred seek overrides this behavior.
+        setTimeout(() => {
+          if (playerRef.current && typeof playerRef.current.seekTo === 'function') {
+            const retarget = calcTarget();
+            if (retarget > 0) {
+              playerRef.current.seekTo(retarget, 'seconds');
+            }
+          }
+        }, 150);
       }
     }
 
     setIsReady(true);
     readyRef.current = true;
-  }, [isHost, expectedCurrentTime]);
+  }, [isHost]);
 
   const handlePlay = useCallback(() => {
     if (isSyncUpdate.current) {
