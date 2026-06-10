@@ -10,22 +10,32 @@ const VideoPlayer = () => {
   const [inputUrl, setInputUrl] = useState('');
   const [playerError, setPlayerError] = useState(null);
   const [connectionError, setConnectionError] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [showUnmuteOverlay, setShowUnmuteOverlay] = useState(false);
+  // Participants must be muted from the very first render to satisfy browser
+  // autoplay policy. If muted=false when playing=true is received for the
+  // first time, HTMLVideoElement.play() is blocked and only a thumbnail shows.
+  // The host never needs muted since they interact via a user gesture (click).
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [isReady, setIsReady] = useState(false);
   const playerRef = useRef(null);
-  const isReady = useRef(false);
   // Ref to suppress sync-triggered play/pause events from being re-broadcast
   const isSyncUpdate = useRef(false);
+
+  const [userClickedUnmute, setUserClickedUnmute] = useState(false);
 
   const userId = useRoomStore(state => state.userId);
   const hostId = useRoomStore(state => state.hostId);
   const isHost = userId === hostId;
+  const isHostRef = useRef(isHost);
+  isHostRef.current = isHost;
 
   const videoUrl = useVideoStore(state => state.videoUrl);
   const playing = useVideoStore(state => state.playing);
   const currentTime = useVideoStore(state => state.currentTime);
   const lastSyncedAt = useVideoStore(state => state.lastSyncedAt);
-  const { syncUrl, syncPlay, syncPause, syncSeek } = useSync();
+  const { syncUrl, syncPlay, syncPause, syncSeek, syncProgress } = useSync();
+
+  const isMuted = !isHost && !userClickedUnmute;
+  const showUnmuteOverlay = !isHost && !userClickedUnmute && isReady && !!videoUrl;
 
   // Track WebSocket connection state for UI feedback
   useEffect(() => {
@@ -35,20 +45,46 @@ const VideoPlayer = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Drift detection for non-host participants
+  // Drift detection and smooth catch-up for non-host participants
   useEffect(() => {
-    if (isHost || !isReady.current || !playerRef.current) return;
+    if (isHost || !isReady || !playerRef.current) return;
 
-    const localTime = playerRef.current.currentTime;
+    const localTime = playerRef.current.getCurrentTime();
     if (localTime == null || isNaN(localTime)) return;
 
-    const drift = Math.abs(localTime - currentTime);
-    if (drift > 1.5) {
-      console.log(`Drift detected: local=${localTime.toFixed(1)}, remote=${currentTime.toFixed(1)}, drift=${drift.toFixed(1)}s. Seeking...`);
-      isSyncUpdate.current = true;
-      playerRef.current.currentTime = currentTime;
+    // Calculate where the server's playhead *should be right now* by accounting
+    // for the time elapsed since the sync message was sent. Without this, the
+    // server-reported currentTime is always a few hundred ms behind reality,
+    // making the participant think they're ahead when they're actually synced.
+    const elapsedSinceSync = (Date.now() - lastSyncedAt) / 1000;
+    const expectedServerTime = currentTime + (playing ? elapsedSinceSync : 0);
+
+    const drift = expectedServerTime - localTime; // Positive if participant is behind
+    const absDrift = Math.abs(drift);
+
+    // Hard seek if video is paused, or if way out of sync (> 4s)
+    if (!playing || absDrift > 4.0) {
+      if (absDrift > 1.0) {
+        console.log(`Hard seeking. Drift: ${drift.toFixed(1)}s`);
+        isSyncUpdate.current = true;
+        playerRef.current.seekTo(expectedServerTime, 'seconds');
+      }
+      setPlaybackRate(1);
+      return;
     }
-  }, [currentTime, lastSyncedAt, isHost]);
+
+    // Smooth catch-up using playback speed (1.25x or 0.75x supported by YouTube)
+    if (drift > 1.5) {
+      // Participant is behind by > 1.5s
+      setPlaybackRate(1.25);
+    } else if (drift < -1.5) {
+      // Participant is ahead by > 1.5s
+      setPlaybackRate(0.75);
+    } else if (absDrift < 0.5) {
+      // Synced! Restore normal speed
+      setPlaybackRate(1);
+    }
+  }, [currentTime, lastSyncedAt, isHost, playing, isReady]);
 
   // When playing state changes from sync, mark it so onPlay/onPause don't re-broadcast
   const prevPlayingRef = useRef(playing);
@@ -79,19 +115,15 @@ const VideoPlayer = () => {
   };
 
   const handleReady = useCallback(() => {
-    isReady.current = true;
     setPlayerError(null);
     console.log('ReactPlayer ready');
-    // If we're a non-host joining after the host already set a time, seek to it
+
+    // Seek late-joining participants to current server position
     if (!isHost && currentTime > 0 && playerRef.current) {
-      playerRef.current.currentTime = currentTime;
+      playerRef.current.seekTo(currentTime, 'seconds');
     }
-    // For participants, we force mute initially to bypass browser Autoplay policies
-    if (!isHost && !isReady.current) {
-      setIsMuted(true);
-      setShowUnmuteOverlay(true);
-    }
-    isReady.current = true;
+
+    setIsReady(true);
   }, [isHost, currentTime]);
 
   const handlePlay = useCallback(() => {
@@ -100,7 +132,7 @@ const VideoPlayer = () => {
       return;
     }
     if (isHost && playerRef.current) {
-      const time = playerRef.current.currentTime;
+      const time = playerRef.current.getCurrentTime();
       if (time != null && !isNaN(time)) syncPlay(time);
     }
   }, [isHost, syncPlay]);
@@ -111,7 +143,7 @@ const VideoPlayer = () => {
       return;
     }
     if (isHost && playerRef.current) {
-      const time = playerRef.current.currentTime;
+      const time = playerRef.current.getCurrentTime();
       if (time != null && !isNaN(time)) syncPause(time);
     }
   }, [isHost, syncPause]);
@@ -122,10 +154,21 @@ const VideoPlayer = () => {
       return;
     }
     if (isHost && playerRef.current) {
-      const time = playerRef.current.currentTime;
+      const time = playerRef.current.getCurrentTime();
       if (time != null && !isNaN(time)) syncSeek(time);
     }
   }, [isHost, syncSeek]);
+
+  const lastSyncTime = useRef(0);
+  const handleProgress = useCallback((state) => {
+    if (!isHost) return;
+    const now = Date.now();
+    // Host sends accurate heartbeat every 3 seconds
+    if (now - lastSyncTime.current > 3000) {
+      lastSyncTime.current = now;
+      syncProgress(state.playedSeconds);
+    }
+  }, [isHost, syncProgress]);
 
   const handleError = useCallback((error) => {
     console.error('ReactPlayer error:', error);
@@ -136,8 +179,7 @@ const VideoPlayer = () => {
   }, []);
 
   const handleUnmute = () => {
-    setIsMuted(false);
-    setShowUnmuteOverlay(false);
+    setUserClickedUnmute(true);
   };
 
   return (
@@ -182,14 +224,17 @@ const VideoPlayer = () => {
               ref={playerRef}
               src={videoUrl}
               playing={playing}
+              playbackRate={playbackRate}
               controls={isHost} // Only host gets native controls
               muted={isMuted} // Participants start muted to allow autoplay
               width="100%"
               height="100%"
               onReady={handleReady}
               onPlay={handlePlay}
-              onPause={handlePause}
-              onSeeked={handleSeeked}
+               onPause={handlePause}
+               onSeek={handleSeeked}
+               onProgress={handleProgress}
+              progressInterval={1000}
               onError={handleError}
               config={{
                 youtube: {

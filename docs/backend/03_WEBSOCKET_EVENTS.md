@@ -85,19 +85,20 @@ All real-time communication uses STOMP over WebSocket. Events are grouped by dom
 
 **Direction:** Client → Server
 
-**Destination:** `/app/chat.send`
+**Destination:** `/app/room.chat.send`
 
 ```json
 {
   "roomId": "abc123",
-  "senderId": "user-001",
+  "userId": "user-001",
+  "username": "Alice",
   "content": "Hello everyone!"
 }
 ```
 
 ---
 
-### MESSAGE_RECEIVED
+### CHAT_MESSAGE
 
 **Direction:** Server → All in room (broadcast)
 
@@ -105,11 +106,14 @@ All real-time communication uses STOMP over WebSocket. Events are grouped by dom
 
 ```json
 {
-  "type": "MESSAGE_RECEIVED",
-  "senderId": "user-001",
-  "senderName": "Alice",
-  "content": "Hello everyone!",
-  "timestamp": 1700000000000
+  "type": "CHAT_MESSAGE",
+  "message": {
+    "roomId": "abc123",
+    "userId": "user-001",
+    "username": "Alice",
+    "content": "Hello everyone!",
+    "timestamp": 1700000000000
+  }
 }
 ```
 
@@ -121,12 +125,12 @@ All real-time communication uses STOMP over WebSocket. Events are grouped by dom
 
 **Direction:** Client (host only) → Server
 
-**Destination:** `/app/sync.play`
+**Destination:** `/app/room.sync.play`
 
 ```json
 {
   "roomId": "abc123",
-  "requesterId": "user-001",
+  "userId": "user-001",
   "currentTime": 55.5
 }
 ```
@@ -136,11 +140,15 @@ All real-time communication uses STOMP over WebSocket. Events are grouped by dom
 ```json
 {
   "type": "SYNC_STATE",
+  "action": "PLAY",
   "playing": true,
   "currentTime": 55.5,
-  "videoUrl": "https://..."
+  "videoUrl": "https://...",
+  "timestamp": 1700000000000
 }
 ```
+
+Action values: `URL_CHANGED`, `PLAY`, `PAUSE`, `SEEK`, `HEARTBEAT`
 
 ---
 
@@ -148,12 +156,12 @@ All real-time communication uses STOMP over WebSocket. Events are grouped by dom
 
 **Direction:** Client (host only) → Server
 
-**Destination:** `/app/sync.pause`
+**Destination:** `/app/room.sync.pause`
 
 ```json
 {
   "roomId": "abc123",
-  "requesterId": "user-001",
+  "userId": "user-001",
   "currentTime": 55.5
 }
 ```
@@ -164,13 +172,13 @@ All real-time communication uses STOMP over WebSocket. Events are grouped by dom
 
 **Direction:** Client (host only) → Server
 
-**Destination:** `/app/sync.seek`
+**Destination:** `/app/room.sync.seek`
 
 ```json
 {
   "roomId": "abc123",
-  "requesterId": "user-001",
-  "seekTime": 120.0
+  "userId": "user-001",
+  "currentTime": 120.0
 }
 ```
 
@@ -180,12 +188,12 @@ All real-time communication uses STOMP over WebSocket. Events are grouped by dom
 
 **Direction:** Client (host only) → Server
 
-**Destination:** `/app/sync.url`
+**Destination:** `/app/room.sync.url`
 
 ```json
 {
   "roomId": "abc123",
-  "requesterId": "user-001",
+  "userId": "user-001",
   "videoUrl": "https://www.youtube.com/watch?v=newvideo"
 }
 ```
@@ -199,6 +207,7 @@ All real-time communication uses STOMP over WebSocket. Events are grouped by dom
 ```json
 {
   "type": "SYNC_STATE",
+  "action": "HEARTBEAT",
   "playing": true,
   "currentTime": 72.3,
   "videoUrl": "https://...",
@@ -277,12 +286,12 @@ All real-time communication uses STOMP over WebSocket. Events are grouped by dom
 | `USER_JOINED` | Server → Room | `/topic/room/{id}` |
 | `USER_LEFT` | Server → Room | `/topic/room/{id}` |
 | `HOST_TRANSFERRED` | Server → Room | `/topic/room/{id}` |
-| `SEND_MESSAGE` | Client → Server | `/app/chat.send` |
-| `MESSAGE_RECEIVED` | Server → Room | `/topic/room/{id}` |
-| `PLAY` | Client → Server | `/app/sync.play` |
-| `PAUSE` | Client → Server | `/app/sync.pause` |
-| `SEEK` | Client → Server | `/app/sync.seek` |
-| `VIDEO_URL_UPDATE` | Client → Server | `/app/sync.url` |
+| `SEND_MESSAGE` | Client → Server | `/app/room.chat.send` |
+| `CHAT_MESSAGE` | Server → Room | `/topic/room/{id}` |
+| `PLAY` | Client → Server | `/app/room.sync.play` |
+| `PAUSE` | Client → Server | `/app/room.sync.pause` |
+| `SEEK` | Client → Server | `/app/room.sync.seek` |
+| `VIDEO_URL_UPDATE` | Client → Server | `/app/room.sync.url` |
 | `SYNC_STATE` | Server → Room | `/topic/room/{id}` |
 | `SYNC_STATE` (initial) | Server → User | `/user/{id}/queue/sync` |
 | `OFFER` | Client → Server → Peer | `/app/signal` → `/user/{id}/queue/signal` |

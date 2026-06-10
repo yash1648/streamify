@@ -1,5 +1,6 @@
 package com.streamify.service;
 
+import com.streamify.exception.RoomNotFoundException;
 import com.streamify.model.Participant;
 import com.streamify.model.Room;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,12 @@ public class PresenceService {
     public void join(String roomId, Participant participant, String sessionId) {
         Room room = roomService.getRoom(roomId);
         roomService.addParticipant(roomId, participant);
+
+        // Remove any stale session for the same user in this room (handles tab re-join)
+        sessionMap.entrySet().removeIf(entry ->
+                entry.getValue().roomId().equals(roomId)
+                        && entry.getValue().participantId().equals(participant.getId())
+        );
         sessionMap.put(sessionId, new SessionInfo(roomId, participant.getId()));
 
         Map<String, Object> payload = new HashMap<>();
@@ -41,7 +48,9 @@ public class PresenceService {
         messagingTemplate.convertAndSend("/topic/room/" + roomId, payload);
         log.info("Broadcast USER_JOINED for {} in room {}", participant.getId(), roomId);
 
-        // Send initial sync state to the joining user
+        // Send initial sync state to the joining user.
+        // Uses sessionId (which matches the Principal name set in StompSessionInterceptor)
+        // so that convertAndSendToUser can correctly route the message.
         Map<String, Object> syncPayload = new HashMap<>();
         syncPayload.put("type", "SYNC_STATE");
         syncPayload.put("playing", room.getVideoState().isPlaying());
@@ -49,14 +58,14 @@ public class PresenceService {
         syncPayload.put("videoUrl", room.getVideoState().getVideoUrl());
         syncPayload.put("timestamp", room.getVideoState().getLastUpdatedAt().toEpochMilli());
 
-        messagingTemplate.convertAndSendToUser(participant.getId(), "/queue/sync", syncPayload);
+        messagingTemplate.convertAndSendToUser(sessionId, "/queue/sync", syncPayload);
     }
 
     public void leave(String roomId, String participantId, String sessionId) {
         Room room;
         try {
             room = roomService.getRoom(roomId);
-        } catch (Exception e) {
+        } catch (RoomNotFoundException e) {
             return; // Room already destroyed or doesn't exist
         }
 
@@ -83,7 +92,7 @@ public class PresenceService {
                 hostPayload.put("newHostId", room.getHostId());
                 messagingTemplate.convertAndSend("/topic/room/" + roomId, hostPayload);
             }
-        } catch (Exception e) {
+        } catch (RoomNotFoundException e) {
             // Room was destroyed, no need to broadcast
         }
     }

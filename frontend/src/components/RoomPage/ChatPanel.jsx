@@ -43,8 +43,13 @@ const ChatPanel = () => {
         ) : (
           messages.map((msg, index) => {
             const isSelf = msg.userId === currentUserId;
+            // Use a combination of content + timestamp + userId as a stable key
+            // Use content + userId + index as a robust key to avoid collisions
+            // when two messages arrive in the same millisecond from the same user.
+            const baseKey = msg.timestamp ? `${msg.userId}-${msg.timestamp}` : `msg-${index}`;
+            const messageKey = `${baseKey}-${index}`;
             return (
-              <div key={index} className={`chat-message ${isSelf ? 'self' : 'other'}`}>
+              <div key={messageKey} className={`chat-message ${isSelf ? 'self' : 'other'}`}>
                 {!isSelf && <div className="sender">{msg.username}</div>}
                 <div className="content">{msg.content}</div>
                 <div className="timestamp">{formatTime(msg.timestamp)}</div>

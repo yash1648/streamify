@@ -4,6 +4,7 @@ import com.streamify.dto.CreateRoomRequest;
 import com.streamify.dto.RoomResponse;
 import com.streamify.model.Room;
 import com.streamify.service.RoomService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,26 +21,19 @@ public class RoomController {
     private final RoomService roomService;
 
     @PostMapping("/rooms")
-    public ResponseEntity<RoomResponse> createRoom(@RequestBody CreateRoomRequest request) {
+    public ResponseEntity<RoomResponse> createRoom(@Valid @RequestBody CreateRoomRequest request) {
         Room room = roomService.createRoom(request.getUserId(), request.getUsername(), request.getRoomName());
-
-        RoomResponse response = RoomResponse.builder()
-                .roomId(room.getId())
-                .hostId(room.getHostId())
-                .roomName(room.getRoomName())
-                .participantCount(room.getParticipants().size())
-                .participants(room.getParticipants().values())
-                .createdAt(room.getCreatedAt())
-                .build();
-
-        return new ResponseEntity<>(response, HttpStatus.CREATED);
+        return new ResponseEntity<>(toRoomResponse(room), HttpStatus.CREATED);
     }
 
     @GetMapping("/rooms/{id}")
     public ResponseEntity<RoomResponse> getRoom(@PathVariable String id) {
         Room room = roomService.getRoom(id);
+        return ResponseEntity.ok(toRoomResponse(room));
+    }
 
-        RoomResponse response = RoomResponse.builder()
+    private static RoomResponse toRoomResponse(Room room) {
+        return RoomResponse.builder()
                 .roomId(room.getId())
                 .hostId(room.getHostId())
                 .roomName(room.getRoomName())
@@ -47,8 +41,6 @@ public class RoomController {
                 .participants(room.getParticipants().values())
                 .createdAt(room.getCreatedAt())
                 .build();
-
-        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/health")
